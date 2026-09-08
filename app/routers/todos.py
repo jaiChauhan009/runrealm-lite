@@ -10,7 +10,7 @@ from app.schemas import TodoCreateRequest, TodoUpdateRequest, ok
 
 router = APIRouter()
 
-_ROW = "id, user_id, title, description, rating, status, created_at"
+_ROW = "t.id, t.user_id, t.title, t.description, t.rating, t.status, t.created_at"
 
 
 def _serialize(row, *, status: str | None = None) -> dict:
@@ -30,7 +30,7 @@ async def _todo_context(db, todo_id: str, user_id: str):
     row = await db.fetchrow(
         f"""
         SELECT {_ROW},
-               (created_at AT TIME ZONE u.timezone)::date AS local_day
+               (t.created_at AT TIME ZONE u.timezone)::date AS local_day
         FROM todos t
         JOIN users u ON u.id = t.user_id
         WHERE t.id = $1
@@ -52,7 +52,7 @@ async def create_todo(
 ):
     row = await db.fetchrow(
         f"""
-        INSERT INTO todos (user_id, title, description, rating, status)
+        INSERT INTO todos AS t (user_id, title, description, rating, status)
         VALUES ($1, $2, $3, $4, 'pending')
         RETURNING {_ROW}
         """,
@@ -120,7 +120,7 @@ async def update_todo(
 
     fields = body.model_dump(exclude_unset=True)
     if not fields:
-        row = await db.fetchrow(f"SELECT {_ROW} FROM todos WHERE id = $1", todo_id)
+        row = await db.fetchrow(f"SELECT {_ROW} FROM todos t WHERE t.id = $1", todo_id)
         return ok(_serialize(row))
 
     sets, params = [], []
@@ -129,7 +129,7 @@ async def update_todo(
         params.append(val)
     params.append(todo_id)
     row = await db.fetchrow(
-        f"UPDATE todos SET {', '.join(sets)} WHERE id = ${len(params)} RETURNING {_ROW}",
+        f"UPDATE todos AS t SET {', '.join(sets)} WHERE t.id = ${len(params)} RETURNING {_ROW}",
         *params,
     )
 
