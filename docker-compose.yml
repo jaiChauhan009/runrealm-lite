@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgis/postgis:15-3.4
+    environment:
+      POSTGRES_USER: runrealm
+      POSTGRES_PASSWORD: runrealm
+      POSTGRES_DB: runrealm
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/00_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runrealm -d runrealm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://runrealm:runrealm@db:5432/runrealm
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: dev-secret-change-me
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+volumes:
+  dbdata:
